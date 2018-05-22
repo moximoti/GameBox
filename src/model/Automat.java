@@ -5,11 +5,13 @@ import java.util.HashSet;
 import java.util.Observable;
 import java.util.*;
 
-public class Automat implements Runnable {
+public class Automat extends Observable implements Runnable {
+
+    // Observers
 
     // Feldgröße
-    private int fw;
-    private int fh;
+    private final int fw;
+    private final int fh;
 
     // Spielregeln
     private int survival[] = {2,3};
@@ -17,34 +19,78 @@ public class Automat implements Runnable {
 
     private long generation;
 
+    // Speed
+    private int speed;
+    private int sleep;
+
+    private boolean isRunning;
+
     private Set<Cell> livingCells;
 
+    public byte viewCounter; // TODO Counter oder direkt Liste mit referenzierten views?
+
     public Automat(int fw, int fh) {
+        isRunning = false;
         this.fw = fw;
         this.fh = fh;
+        init();
+    }
+
+    public void init() {
+        setSpeed(50);
         generation = 0;
+        viewCounter = 0;
         livingCells = new HashSet<>();
+    }
+
+    public void setSpeed(int speed) {
+        if (speed > 101 || speed < 1) {
+            throw new IllegalArgumentException( "Geschwindigkeit muss zwischen 1 und 100 liegen!" );
+        } else {
+            this.speed = speed;
+            sleep = (int)(Math.pow(0.96, speed)*1000);
+        }
+        setChanged();
+        notifyObservers(2);
+
+    }
+
+    public int getSpeed() {
+        return speed;
     }
 
     public void addLivingCellAt(int x, int y) {
         livingCells.add(new Cell(x,y));
+        setChanged();
+        notifyObservers(1);
     }
 
     public void toggleLivingCellAt(int x, int y) {
         Cell cell = new Cell(x,y);
         if (livingCells.contains(cell)) livingCells.remove(cell);
         else livingCells.add(cell);
+        setChanged();
+        notifyObservers(1);
     }
 
     public void removeLivingCellAt(int x, int y) {
         livingCells.remove(new Cell(x,y));
+        setChanged();
+        notifyObservers(1);
     }
 
-    public void clearLivingCells(int x, int y) {
+    public void clearLivingCells() {
         livingCells.clear();
+        setChanged();
+        notifyObservers(1);
     }
 
-    public void calculateNextGen() {
+    public void reset() {
+        generation = 0;
+        clearLivingCells();
+    }
+
+    private void calculateNextGen() {
         // Nur Zellen in unmittelbarer Nachbarschaft zu Lebenden Zellen müssen neu berechnet werden
         // Step 1: Vorigen Zwischenspeicher löschen. Lebende und dessen Nachbarn zur Überprüfung zwischenspeichern.
         Set<Cell> ngLivingCells = new HashSet<>(livingCells);       // TODO Exception in thread "main" java.util.ConcurrentModificationException
@@ -68,7 +114,7 @@ public class Automat implements Runnable {
             }
 
             // Step 2.2: Spielregeln anwenden
-            int temp = neighborCount;
+            final int temp = neighborCount;
             if (Arrays.stream(survival).noneMatch(x -> x == temp)) ngLivingCells.remove(c);
             if (Arrays.stream(birth).anyMatch(x -> x == temp)) ngLivingCells.add(c);
 
@@ -78,6 +124,8 @@ public class Automat implements Runnable {
         livingCells.clear();
         livingCells.addAll(ngLivingCells);
         generation++;
+        setChanged();
+        notifyObservers(1);
     }
 
     public long getGeneration() {
@@ -99,8 +147,21 @@ public class Automat implements Runnable {
 
     @Override
     public void run() {
-        //TODO
+        isRunning = true;
+        //init();
+        while (isRunning) {
+            try {
+                calculateNextGen();
+                Thread.sleep(sleep);
+                //System.out.println("Thread läuft");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
+    public void stop() {
+        isRunning = false;
     }
 
     /**

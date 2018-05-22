@@ -1,25 +1,27 @@
 package view;
 
+import controller.GameController;
 import model.Automat.Cell;
 import model.Automat;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.geom.AffineTransform;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
-public class CellPanel extends JPanel {
+public class CellPanel extends JPanel implements Observer {
 
-    Automat linkedGame;
+    Automat model;
     private int zoom;
     private Shape selectedShape;
 
-    public CellPanel(Automat linkedGame) {
-        this.linkedGame = linkedGame;
+    public CellPanel(Automat model) {
+        this.model = model;
         zoom = 8;
         selectedShape = null;
+        setPreferredSize(new Dimension(zoom * model.getFw(), zoom * model.getFh()));
+        setMaximumSize(new Dimension(zoom * model.getFw(), zoom * model.getFh()));
+        setMinimumSize(new Dimension(zoom * model.getFw(), zoom * model.getFh()));
+        setBackground(Color.YELLOW);
     }
 
     public Shape getSelectedShape() {
@@ -42,7 +44,7 @@ public class CellPanel extends JPanel {
         super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g;
         //cellElements.clear();
-        Set<Cell> cloneLivingCells = new HashSet<>(linkedGame.getLivingCells());
+        Set<Cell> cloneLivingCells = new HashSet<>(model.getLivingCells());
 
 /*
         AffineTransform at = new AffineTransform();
@@ -54,8 +56,8 @@ public class CellPanel extends JPanel {
 */
 
 
-        for (int i = 0; i < linkedGame.getFh(); i++) {
-            for (int k = 0; k < linkedGame.getFw(); k++) {
+        for (int i = 0; i < model.getFh(); i++) {
+            for (int k = 0; k < model.getFw(); k++) {
                 Rectangle rect = new Rectangle(i * zoom, k * zoom, zoom, zoom);
                 g2d.setColor(Color.darkGray);
                 g2d.fill(rect);
@@ -84,5 +86,10 @@ public class CellPanel extends JPanel {
             //newG2.dispose(); // because this is a created Graphics object
         }
 
+    }
+
+    @Override
+    public void update(Observable o, Object arg) {
+        if ((int)arg == 1) repaint();
     }
 }
