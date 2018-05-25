@@ -7,6 +7,8 @@ import view.GameFrame;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
+import java.awt.geom.Point2D;
 
 
 public class GameController {
@@ -15,37 +17,23 @@ public class GameController {
     private GameFrame gameFrame;
     private CellPanel cellPanel;
 
-    // Parent View
-
     // Model
     private Automat model;
-
-    // Control Logic
-    private Mode mode;
 
 
     public GameController(Automat model) {
         this.model = model;
         this.gameFrame = new GameFrame(model, this);
         this.cellPanel = gameFrame.getCellPanel();
-        this.mode = Mode.PAINT;
 
         MyMouseAdapter ma = new MyMouseAdapter();
         cellPanel.addMouseListener(ma);
         cellPanel.addMouseMotionListener(ma);
+        gameFrame.cellPanelWrapper.addMouseWheelListener(ma);
         model.addObserver(cellPanel);
         model.addObserver(gameFrame);
 
     }
-
-    public Mode getMode() {
-        return mode;
-    }
-
-    public void setMode(Mode mode) {
-        this.mode = mode;
-    }
-
 
     public GameFrame getGameFrame() {
         return gameFrame;
@@ -54,12 +42,28 @@ public class GameController {
     private class MyMouseAdapter extends MouseAdapter {
 
         @Override
-        public void mousePressed(MouseEvent e) {
-            if (mode == Mode.TOGGLE) {
-                super.mousePressed(e);
-                model.toggleLivingCellAt(e.getX()/cellPanel.getZoom(),e.getY()/cellPanel.getZoom());
+        public void mouseWheelMoved(MouseWheelEvent e) {
+            super.mouseWheelMoved(e);
+            int newValue = cellPanel.getZoom()+e.getWheelRotation();
+            if (newValue > 1 && newValue <= 100) {
                 cellPanel.setSelectedShape(null);
-                //cellPanel.repaint();
+                cellPanel.setZoom(newValue);
+                gameFrame.setSize(gameFrame.getSize());
+                gameFrame.repaint();
+            }
+        }
+
+        @Override
+        public void mousePressed(MouseEvent e) {
+            if (model.getMode() == Mode.TOGGLE) {
+                if (cellPanel.mouseTransform != null) {
+                    Point2D p = cellPanel.mouseTransform.transform(new Point2D.Double(e.getX(), e.getY()), null);
+                    model.addLivingCellAt((int)p.getX() / cellPanel.getZoom(), (int)p.getY() / cellPanel.getZoom());
+                } else {
+                    super.mousePressed(e);
+                    model.toggleLivingCellAt(e.getX() / cellPanel.getZoom(), e.getY() / cellPanel.getZoom());
+                    cellPanel.setSelectedShape(null);
+                }
             }
         }
 
@@ -72,22 +76,36 @@ public class GameController {
 
         @Override
         public void mouseMoved(MouseEvent e) {
-            if (mode != Mode.RUN) {
+            if (model.getMode() != Mode.RUN) {
                 super.mouseMoved(e);
-                Shape s = new Rectangle(e.getX()/cellPanel.getZoom()*cellPanel.getZoom(),e.getY()/cellPanel.getZoom()*cellPanel.getZoom(),cellPanel.getZoom(),cellPanel.getZoom());
-                cellPanel.setSelectedShape(s);
+                if (cellPanel.mouseTransform != null) {
+                    Point2D p = cellPanel.mouseTransform.transform(new Point2D.Double(e.getX(), e.getY()), null);
+                    Shape s = new Rectangle((int)p.getX()/cellPanel.getZoom()*cellPanel.getZoom(),(int)p.getY()/cellPanel.getZoom()*cellPanel.getZoom(),cellPanel.getZoom(),cellPanel.getZoom());
+                    cellPanel.setSelectedShape(s);
+                } else {
+                    Shape s = new Rectangle(e.getX()/cellPanel.getZoom()*cellPanel.getZoom(),e.getY()/cellPanel.getZoom()*cellPanel.getZoom(),cellPanel.getZoom(),cellPanel.getZoom());
+                    cellPanel.setSelectedShape(s);
+                }
                 cellPanel.repaint();
             }
         }
 
         @Override
         public void mouseDragged(MouseEvent e) {
-            if (mode == Mode.PAINT) {
+            if (model.getMode() == Mode.PAINT) {
+                super.mouseDragged(e);
+                if (cellPanel.mouseTransform != null) {
+                    Point2D p = cellPanel.mouseTransform.transform(new Point2D.Double(e.getX(), e.getY()), null);
+                    model.addLivingCellAt((int)p.getX() / cellPanel.getZoom(), (int)p.getY() / cellPanel.getZoom());
+                    Shape s = new Rectangle((int)p.getX()/cellPanel.getZoom()*cellPanel.getZoom(),(int)p.getY()/cellPanel.getZoom()*cellPanel.getZoom(),cellPanel.getZoom(),cellPanel.getZoom());                    cellPanel.setSelectedShape(s);
+                    cellPanel.setSelectedShape(s);
+                } else {
+                    model.addLivingCellAt(e.getX() / cellPanel.getZoom(), e.getY() / cellPanel.getZoom());
+                    Shape s = new Rectangle(e.getX()/cellPanel.getZoom()*cellPanel.getZoom(),e.getY()/cellPanel.getZoom()*cellPanel.getZoom(),cellPanel.getZoom(),cellPanel.getZoom());
+                    cellPanel.setSelectedShape(s);
+                }
                 //System.out.println("Mouse dragging detected! Actual mouse position is: " + e.getX()+ "," + e.getY() + ".");
-                model.addLivingCellAt(e.getX() / cellPanel.getZoom(), e.getY() / cellPanel.getZoom());
 
-                Shape s = new Rectangle(e.getX()/cellPanel.getZoom()*cellPanel.getZoom(),e.getY()/cellPanel.getZoom()*cellPanel.getZoom(),cellPanel.getZoom(),cellPanel.getZoom());
-                cellPanel.setSelectedShape(s);
             }
         }
     }

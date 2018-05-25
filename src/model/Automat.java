@@ -1,21 +1,32 @@
 package model;
 
+import controller.Mode;
+import view.GameFrame;
+
+import java.io.*;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Observable;
 import java.util.*;
 
-public class Automat extends Observable implements Runnable {
+public class Automat extends Observable implements Runnable, Cloneable, Serializable {
 
-    // Observers
+    // Instanz Counter
+    private static int instanceCounter = 0;
+    private int instanceNumber;
+
+    // aktive Views
+    private ArrayList<GameFrame> activeViews;
+    public int viewCounter;
+
 
     // Feldgröße
     private final int fw;
     private final int fh;
 
     // Spielregeln
-    private int survival[] = {2,3};
-    private int birth[] = {3};
+    private int[] survival = {2,3};
+    private int[] birth = {3};
 
     private long generation;
 
@@ -23,24 +34,75 @@ public class Automat extends Observable implements Runnable {
     private int speed;
     private int sleep;
 
+    // Mode
+    private Mode mode;
     private boolean isRunning;
 
+    // Daten
     private Set<Cell> livingCells;
 
-    public byte viewCounter; // TODO Counter oder direkt Liste mit referenzierten views?
 
     public Automat(int fw, int fh) {
+        instanceCounter++;
+        instanceNumber = instanceCounter;
+        activeViews = new ArrayList<>();
+        setMode(Mode.PAINT);
         isRunning = false;
         this.fw = fw;
         this.fh = fh;
-        init();
-    }
-
-    public void init() {
         setSpeed(50);
         generation = 0;
         viewCounter = 0;
-        livingCells = new HashSet<>();
+        livingCells = Collections.synchronizedSet(new HashSet<>());
+    }
+
+    public Automat clone() {
+        Automat clone = new Automat(fw,fh);
+        clone.livingCells = new HashSet<>(this.livingCells);
+        return clone;
+    }
+
+    public void setRules (String s) {
+        String[] parts = s.split("/");
+        this.survival = new int[parts[0].length()];
+        this.birth = new int[parts[1].length()];
+        for (int i = 0; i < parts[0].length(); i++) {
+            survival[i] = Character.getNumericValue(parts[0].charAt(i));
+        }
+        for (int i = 0; i < parts[1].length(); i++) {
+            birth[i] = Character.getNumericValue(parts[1].charAt(i));
+        }
+    }
+
+    public ArrayList<GameFrame> getActiveViews() {
+        return activeViews;
+    }
+
+    public int getInstanceNumber() {
+        return instanceNumber;
+    }
+
+    public int getViewCount() {
+        return viewCounter;
+    }
+
+    public void addActiveView(GameFrame activeView) {
+        activeViews.add(activeView);
+        viewCounter++;
+    }
+
+    public void removeActiveView(GameFrame activeView) {
+        activeViews.remove(activeView);
+    }
+
+    public Mode getMode() {
+        return mode;
+    }
+
+    public void setMode(Mode mode) {
+        this.mode = mode;
+        setChanged();
+        notifyObservers(2);
     }
 
     public void setSpeed(int speed) {
@@ -61,6 +123,7 @@ public class Automat extends Observable implements Runnable {
 
     public void addLivingCellAt(int x, int y) {
         livingCells.add(new Cell(x,y));
+        //push();
         setChanged();
         notifyObservers(1);
     }
@@ -69,6 +132,7 @@ public class Automat extends Observable implements Runnable {
         Cell cell = new Cell(x,y);
         if (livingCells.contains(cell)) livingCells.remove(cell);
         else livingCells.add(cell);
+        //push();
         setChanged();
         notifyObservers(1);
     }
@@ -92,38 +156,42 @@ public class Automat extends Observable implements Runnable {
 
     private void calculateNextGen() {
         // Nur Zellen in unmittelbarer Nachbarschaft zu Lebenden Zellen müssen neu berechnet werden
-        // Step 1: Vorigen Zwischenspeicher löschen. Lebende und dessen Nachbarn zur Überprüfung zwischenspeichern.
-        Set<Cell> ngLivingCells = new HashSet<>(livingCells);       // TODO Exception in thread "main" java.util.ConcurrentModificationException
-        Set<Cell> cloneLivingCells = new HashSet<>(livingCells);    // TODO Concurrency!!!
-        Set<Cell> evolvingCells = new HashSet<>();
+        // Step 1: Lebende und dessen Nachbarn zur Überprüfung zwischenspeichern.
+        //Set<Cell> ngLivingCells = new HashSet<>(livingCells);
+        //Set<Cell> evolvingCells = new HashSet<>(livingCells);
+        Set<Cell> ngLivingCells = Collections.synchronizedSet(new HashSet<>(livingCells));
+        Set<Cell> evolvingCells = Collections.synchronizedSet(new HashSet<>(livingCells));
 
-        for (Cell c : cloneLivingCells) {
-            evolvingCells.add(c);
-            evolvingCells.addAll(c.getNeighborCells());
+        // Dieser Block ist nur notwendig wenn neue Zellen bei 0 Nachbarn geboren werden.
+        if (Arrays.stream(birth).anyMatch(x -> x == 0)) {
+            for (int i = 0; i < fh; i++) {
+                for (int j = 0; j < fw; j++) {
+                    evolvingCells.add(new Cell(j,i));
+                }
+            }
         }
+        livingCells.parallelStream().forEach(c -> {
+            evolvingCells.addAll(c.getNeighborCells());
+        });
         // Step 2: Auf Lebende Zellen in Nachbarschaft prüfen
-        Set<Cell> currentNeighbors;
-        for (Cell c : evolvingCells) {
-            currentNeighbors = new HashSet<>(c.getNeighborCells());
-
-            // Step 2.1: Lebende Nachbarn zählen
+        evolvingCells.parallelStream().forEach(c -> {
             int neighborCount = 0;
-            for (Cell cn : currentNeighbors) {
-                if (cloneLivingCells.contains(cn))
+            for (Cell cn : c.getNeighborCells()) {
+                if (livingCells.contains(cn))
                     neighborCount++;
             }
 
             // Step 2.2: Spielregeln anwenden
-            final int temp = neighborCount;
-            if (Arrays.stream(survival).noneMatch(x -> x == temp)) ngLivingCells.remove(c);
-            if (Arrays.stream(birth).anyMatch(x -> x == temp)) ngLivingCells.add(c);
-
-        }
+            final int finalNeighborCount = neighborCount;
+            if (Arrays.stream(survival).noneMatch(x -> x == finalNeighborCount)) ngLivingCells.remove(c);
+            if (Arrays.stream(birth).anyMatch(x -> x == finalNeighborCount)) ngLivingCells.add(c);
+        });
 
         // Step 3: Generation übernehmen und ++
-        livingCells.clear();
-        livingCells.addAll(ngLivingCells);
+        //livingCells.clear();
+        livingCells = new HashSet<>(ngLivingCells);
         generation++;
+        //push();
         setChanged();
         notifyObservers(1);
     }
@@ -148,12 +216,10 @@ public class Automat extends Observable implements Runnable {
     @Override
     public void run() {
         isRunning = true;
-        //init();
-        while (isRunning) {
+        while (isRunning && !activeViews.isEmpty()) {
             try {
                 calculateNextGen();
                 Thread.sleep(sleep);
-                //System.out.println("Thread läuft");
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -180,11 +246,6 @@ public class Automat extends Observable implements Runnable {
         public Cell(int x, int y){
             this.x = (fw + x) % fw;
             this.y = (fh + y) % fh;
-        }
-
-        public int[] getCoordinates() {
-            int[] coordinates = {x,y};
-            return coordinates;
         }
 
         public int getX() {
