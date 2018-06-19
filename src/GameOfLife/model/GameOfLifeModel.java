@@ -1,7 +1,7 @@
-package model;
+package GameOfLife.model;
 
-import controller.Mode;
-import view.GameFrame;
+import GameOfLife.controller.Mode;
+import GameOfLife.view.GameFrame;
 
 import java.io.*;
 import java.util.Arrays;
@@ -9,7 +9,7 @@ import java.util.HashSet;
 import java.util.Observable;
 import java.util.*;
 
-public class Automat extends Observable implements Runnable, Cloneable, Serializable {
+public class GameOfLifeModel extends Observable implements Runnable, Cloneable, Serializable {
 
     // Instanz Counter
     private static int instanceCounter = 0;
@@ -42,7 +42,7 @@ public class Automat extends Observable implements Runnable, Cloneable, Serializ
     private Set<Cell> livingCells;
 
 
-    public Automat(int fw, int fh) {
+    public GameOfLifeModel(int fw, int fh) {
         instanceCounter++;
         instanceNumber = instanceCounter;
         activeViews = new ArrayList<>();
@@ -56,8 +56,8 @@ public class Automat extends Observable implements Runnable, Cloneable, Serializ
         livingCells = Collections.synchronizedSet(new HashSet<>());
     }
 
-    public Automat clone() {
-        Automat clone = new Automat(fw,fh);
+    public GameOfLifeModel clone() {
+        GameOfLifeModel clone = new GameOfLifeModel(fw,fh);
         clone.livingCells = new HashSet<>(this.livingCells);
         return clone;
     }
@@ -156,11 +156,16 @@ public class Automat extends Observable implements Runnable, Cloneable, Serializ
 
     private void calculateNextGen() {
         // Nur Zellen in unmittelbarer Nachbarschaft zu Lebenden Zellen müssen neu berechnet werden
-        // Step 1: Lebende und dessen Nachbarn zur Überprüfung zwischenspeichern.
-        //Set<Cell> ngLivingCells = new HashSet<>(livingCells);
-        //Set<Cell> evolvingCells = new HashSet<>(livingCells);
-        Set<Cell> ngLivingCells = Collections.synchronizedSet(new HashSet<>(livingCells));
+        // Lebende und dessen Nachbarn zur Überprüfung zwischenspeichern.
         Set<Cell> evolvingCells = Collections.synchronizedSet(new HashSet<>(livingCells));
+
+        evolvingCells.addAll(
+            livingCells.parallelStream().collect(
+                HashSet::new,
+                (c, e) -> c.addAll(e.getNeighborCells()),
+                AbstractCollection::addAll
+            )
+        );
 
         // Dieser Block ist nur notwendig wenn neue Zellen bei 0 Nachbarn geboren werden.
         if (Arrays.stream(birth).anyMatch(x -> x == 0)) {
@@ -170,28 +175,27 @@ public class Automat extends Observable implements Runnable, Cloneable, Serializ
                 }
             }
         }
-        livingCells.parallelStream().forEach(c -> {
-            evolvingCells.addAll(c.getNeighborCells());
-        });
-        // Step 2: Auf Lebende Zellen in Nachbarschaft prüfen
-        evolvingCells.parallelStream().forEach(c -> {
+
+        // Für jede zu überprüfende Zelle Nachbarn zählen und neuen Status
+        livingCells = evolvingCells.parallelStream().collect(HashSet::new, (cellSet, cell) -> {
             int neighborCount = 0;
-            for (Cell cn : c.getNeighborCells()) {
-                if (livingCells.contains(cn))
+
+            for (Cell c : cell.getNeighborCells()) {
+                if (livingCells.contains(c))
                     neighborCount++;
             }
 
-            // Step 2.2: Spielregeln anwenden
             final int finalNeighborCount = neighborCount;
-            if (Arrays.stream(survival).noneMatch(x -> x == finalNeighborCount)) ngLivingCells.remove(c);
-            if (Arrays.stream(birth).anyMatch(x -> x == finalNeighborCount)) ngLivingCells.add(c);
-        });
+            if (Arrays.stream(birth).anyMatch(x -> x == finalNeighborCount)) {
+                cellSet.add(cell);
+            } else if (livingCells.contains(cell)) {
+                if (Arrays.stream(survival).anyMatch(x -> x == finalNeighborCount)) cellSet.add(cell);
+            }
 
-        // Step 3: Generation übernehmen und ++
-        //livingCells.clear();
-        livingCells = new HashSet<>(ngLivingCells);
+            },
+            AbstractCollection::addAll
+        );
         generation++;
-        //push();
         setChanged();
         notifyObservers(1);
     }

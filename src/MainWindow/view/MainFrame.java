@@ -1,12 +1,9 @@
-package view;
+package MainWindow.view;
 
-import controller.MainFrameController;
+import MainWindow.controller.MainFrameController;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.stream.Stream;
 
 public class MainFrame extends JFrame {
 
@@ -18,9 +15,6 @@ public class MainFrame extends JFrame {
     public JMenu menuGame;
     public JMenuItem newGame;
     public JMenuItem quit;
-    //JMenu[] menuItems;
-    //JMenuItem[] menuEntriesDatei;
-    //ArrayList<JComponent> menuEntriesSpiel;
 
     public MainFrame() {
         desktopPane = new JDesktopPane();

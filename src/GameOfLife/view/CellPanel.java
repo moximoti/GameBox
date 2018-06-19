@@ -1,7 +1,7 @@
-package view;
+package GameOfLife.view;
 
-import model.Automat.Cell;
-import model.Automat;
+import GameOfLife.model.GameOfLifeModel.Cell;
+import GameOfLife.model.GameOfLifeModel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -11,7 +11,7 @@ import java.util.*;
 
 public class CellPanel extends JPanel implements Observer {
 
-    final Automat model;
+    final GameOfLifeModel model;
 
     private int zoom;
     private Shape selectedShape;
@@ -27,7 +27,7 @@ public class CellPanel extends JPanel implements Observer {
     public Color colorDead;
     public boolean gridOn;
 
-    public CellPanel(Automat model) {
+    public CellPanel(GameOfLifeModel model) {
         this.model = model;
         colorAlive = Color.CYAN;
         colorDead = Color.DARK_GRAY;

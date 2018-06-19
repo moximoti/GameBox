@@ -1,13 +1,10 @@
-package controller;
+package MainWindow.controller;
 
-import model.Automat;
-import view.GameFrame;
-import view.MainFrame;
+import GameOfLife.controller.GameController;
+import GameOfLife.model.GameOfLifeModel;
+import MainWindow.view.MainFrame;
 
 import javax.swing.*;
-import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 
 
 public class MainFrameController {
@@ -23,14 +20,20 @@ public class MainFrameController {
         mainFrame.newGame.addActionListener( e -> {
             // Neues Model erzeugen
             Integer[] sizeOptions = {40,80,160,320};
-            int size = (int) JOptionPane.showInputDialog(
-                    mainFrame,
-                    "Feldgröße",
-                    "Bitte Feldgröße wählen:",
-                    JOptionPane.QUESTION_MESSAGE,
-                    null, sizeOptions,
-                    sizeOptions[1] );
-            Automat a = new Automat(size,size);
+            int size = 80;
+            try {
+                size = (int) JOptionPane.showInputDialog(
+                        mainFrame,
+                        "Feldgröße",
+                        "Bitte Feldgröße wählen:",
+                        JOptionPane.QUESTION_MESSAGE,
+                        null, sizeOptions,
+                        sizeOptions[1] );
+            } catch (NullPointerException ex) {
+                return;
+            }
+
+            GameOfLifeModel a = new GameOfLifeModel(size,size);
 
             // View und Controller erzeugen
             GameController gameController = new GameController(a);
